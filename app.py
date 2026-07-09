@@ -1,5 +1,4 @@
 from fastapi import FastAPI, Request
-import requests
 import threading
 app = FastAPI()
 
