@@ -65,7 +65,7 @@ async def zalo_webhook(request: Request):
     # In ra log để bạn xem trên Render
     print("Dữ liệu Zalo gửi về:", data)
 
-    thread = threading.Thread(target=process_message, args=(body,))
+    thread = threading.Thread(target=process_message, args=(data,))
     thread.start()
     
     # Kiểm tra xem có phải sự kiện người dùng gửi tin nhắn không
