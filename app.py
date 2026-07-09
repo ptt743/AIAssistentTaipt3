@@ -1,54 +1,64 @@
 from fastapi import FastAPI, Request
+import requests
 import threading
 app = FastAPI()
 
 ZALO_ACCESS_TOKEN = '3963325544432664358:LmvKzdOsOcQGHOqlabTisFDCldhBsNqbIpZjausvWwbYjlBHlTMJNtjWHYqAhIis'
+ZALO_BOT_TOKEN = os.environ.get("ZALO_BOT_TOKEN",ZALO_ACCESS_TOKEN)
+BASE_URL = f"https://bot-api.zapps.me/bot{ZALO_BOT_TOKEN}"
 
-
-def send_zalo_message(user_id, text):
-    endpoint = 'https://openapi.zalo.me/v3.0/oa/message/cs'
-    
-    # Đóng gói data theo đúng format Zalo yêu cầu
+def send_message(chat_id, text):
+    """Gửi tin nhắn trả lời cho người dùng qua Zalo Bot API.
+ 
+    Đây chính là cách 'trả response về cho bot': gọi endpoint sendMessage,
+    KHÔNG phải trả nội dung trong HTTP response của webhook.
+    """
+    url = f"{BASE_URL}/sendMessage"
     payload = {
-        "recipient": {
-            "user_id": user_id
-        },
-        "message": {
-            "text": text
-        }
+        "chat_id": chat_id,
+        "text": text,
     }
-    
-    headers = {
-        'access_token': ZALO_ACCESS_TOKEN,
-        'Content-Type': 'application/json'
-    }
-
     try:
-        response = requests.post(endpoint, json=payload, headers=headers)
-        response.raise_for_status() # Kiểm tra xem request có lỗi HTTP không
-        print(f"Đã gửi tin phản hồi thành công tới {user_id}")
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        print(f"Đã gửi tin phản hồi thành công tới {chat_id}")
     except requests.exceptions.RequestException as e:
         print(f"Lỗi khi gửi API Zalo: {e}")
         if e.response is not None:
-            print("Chi tiết lỗi từ Zalo:", e.response.json())
+            print("Chi tiết lỗi từ Zalo:", e.response.text)
 
-def process_message(body):
-    if body.get('event_name') == 'user_send_text':
-        user_id = body['sender']['id']
-        user_message = body['message']['text']
-
-        print(f'Nhận được tin nhắn: "{user_message}" từ user: {user_id}')
-
-        # Xử lý logic Backend (Ví dụ: kiểm tra giờ giấc, query Database...)
-        reply_text = "Dạ, hệ thống đã ghi nhận thông tin."
-        
-        if "đặt món" in user_message.lower():
-            # Giả lập bot trả lời dựa trên logic
-            reply_text = "Dạ buổi tối bên em đang có sẵn Bún Bò Huế và Cơm Tấm. Anh muốn dùng món nào ạ? (Anh có thể ghi chú thêm như không hành, ít cay...)"
-
-        # Gọi hàm gửi tin đi
-        send_zalo_message(user_id, reply_text)
-
+def process_message(update):
+    """Xử lý một update và gửi câu trả lời.
+ 
+    Cấu trúc update của Zalo Bot API (giống Telegram):
+    {
+        "message": {
+            "text": "...",
+            "chat": {"id": "..."},
+            "from": {...}
+        }
+    }
+    """
+    message = update.get("message") or {}
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
+    user_message = (message.get("text") or "").strip()
+ 
+    if not chat_id or not user_message:
+        return
+ 
+    print(f'Nhận được tin nhắn: "{user_message}" từ chat_id: {chat_id}')
+ 
+    # Xử lý logic Backend (kiểm tra giờ giấc, query Database...)
+    reply_text = "Dạ, hệ thống đã ghi nhận thông tin."
+ 
+    if "đặt món" in user_message.lower():
+        reply_text = (
+            "Dạ buổi tối bên em đang có sẵn Bún Bò Huế và Cơm Tấm. "
+            "Anh muốn dùng món nào ạ? (Anh có thể ghi chú thêm như không hành, ít cay...)"
+        )
+ 
+    send_message(chat_id, reply_text)
 
 @app.get("/")
 def read_root():
